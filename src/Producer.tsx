@@ -20,11 +20,11 @@ app.use(express.json()); //to parse any incoming JSON text to JS object, which i
 const sqsClient = new SQSClient({ region: process.env.AWS_REGION });
 
 
-interface OrderRequest {
-   userId: string;
-   productId: string;
-   quantity: number;
-}
+// interface OrderRequest {
+//    userId: string;
+//    productId: string;
+//    quantity: number;
+// }
 
 
 // THE "FLASH SALE" ENDPOINT

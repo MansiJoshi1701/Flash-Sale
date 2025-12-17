@@ -10,9 +10,9 @@ import { useState, useEffect } from 'react';
 export default function App() {
 
   const [stock , setStock] = useState(20);
-  const [requestQueued , setRequestQueued] = useState(false);
+  const [orderStatus , setOrderStatus] = useState<string | null>(null);
   const [orderID , setOrderID] = useState<string | null>(null);
-  const [orderProcessing , setOrderProcessing] = useState(false);
+  // const [orderProcessing , setOrderProcessing] = useState(false);
 
 
   //useEffect will run every 2 sec and update the stock to (stock-3)
@@ -27,93 +27,130 @@ export default function App() {
     
   },[])
 
+  
 
-  const handleBuyStock = () => {
+  const handleGrabDeal = () => {
 
-    setOrderProcessing(true);
-    setRequestQueued(false);
+    setOrderStatus(null);
 
-    //The function inside the setTimeout will run after 2000ms
-    setTimeout(() => {
+    if(stock > 0){
+                
+      setStock(prev => prev-1);
 
-      if(stock > 0){
-        setStock(prev => prev-1);
+      setOrderStatus("Queued");
 
-        //set 'requestQueued' to true & 'orderProcessing' to false
-        setRequestQueued(true);
-        setOrderProcessing(false);
+      //Generate order ID
+      setOrderID(`ord-${Math.floor(Math.random() * 10000)}`);
 
-        //generate order ID
-        genarateOrderID();
-      }
-    } , 2000)
+    }
+
+
+    //After 5 secs start Processing the order i.e. entering card details etc.
+    setTimeout(() => { 
+      setOrderStatus("Processing");
+    },5000)
     
-
   }
 
-  const genarateOrderID = () => {
+  
 
-    let ID : string = "ord-" + Math.floor(Math.random() * 10000);
-    setOrderID(ID);
+  const renderContent = () => {
+    switch (orderStatus) {
+          case 'Queued':
+            return(
+              <div className='w-full flex flex-col items-center gap-2'>
+                <h2>Securing Inventory. . .</h2>
+                <p>We are locking this unit to your Account ID. Do not refresh</p>
+              </div>
+            );
+            
+          case 'Processing':
+            return(
+              <div className='w-full flex flex-col rounded-xl gap-4 '>
+                <div>
+                  <p className='font-bold'>Stock reserved for 05:00</p>
+                  <p>Complete payment to confirm</p>
+                </div>
+
+                <div>
+                  <input type="text" placeholder='4242 4242 4242 4242'/>
+                </div>
+
+                <div className='w-full flex justify-between rounded-xl'>
+                  <input type="text" placeholder='12/26' />
+                  <input type="text" placeholder='123' />
+                </div>
+                
+                <button 
+                  className='flex w-full py-4 font-bold text-lg rounded-xl items-center justify-center'
+                  onClick={() => setOrderStatus("Confirmed")}
+                >
+                  Pay $1,199
+                </button>
+              </div>
+            )
+
+          case 'Confirmed':
+            return(
+              <div className='w-full flex flex-col items-center gap-2'>
+                <h2 className='font-bold text-3xl'>You Got it!</h2>
+                <p>Order ID: {orderID}</p>
+              </div>
+            )
+        
+          default:
+            return(
+              <div>
+                <div>
+                  <div className="flex justify-between">
+                    <h2>iPhone 15 Pro max</h2>
+                    <h2>$1,199</h2>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <p>Titanium Blue  256 GB</p>
+                    <p className='line-through'>$1,499</p>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between">
+                    <p>Inventory</p>
+                    <p>{stock} units left</p>
+                  </div>
+
+                  {/* Sliding bar */}
+                  <div className='w-full h-3 bg-gray-200 rounded-full relative overflow-hidden'>
+                    <div className={`w-full h-3 transition-all duration-500 ease-out ${stock < 7 ? 'bg-red-500' : 'bg-green-500' }`}  style={{ width: `${(stock/20)*100}%` }}/>
+                  </div>
+                </div>
+
+                <button
+                  className='flex w-full py-4 font-bold text-lg rounded-xl items-center justify-center'
+                  onClick={handleGrabDeal}
+                >
+                  Grab Deal
+                </button>
+
+              </div>
+            )
+        }
   }
 
-
-  const buttonText = orderProcessing ? "Processing..." : "Buy Now";
 
   
   return (
     <div className='w-full bg-slate-900 text-white p-4 flex justify-center items-center min-h-screen'>
-        <div className='mx-auto max-w-md w-full bg-slate-800 rounded-2xl border border-slate-700'>
+      <div className='mx-auto max-w-md w-full bg-slate-800 rounded-2xl border border-slate-700'>
 
-          <div>
-            <h1>Flash Sale</h1>
-            <p>Ends in 10:00 minutes</p>
-          </div>
+        <div className='w-full flex flex-col items-center h-20 bg-purple-500 text-3xl font-bold'>
+          <h1>Flash Sale</h1>
+        </div>
 
-          <div>
-            <div className="flex justify-between">
-              <h2>iPhone 15 Pro max</h2>
-              <h2>$1,199</h2>
-            </div>
-
-            <div className="flex justify-between">
-              <p>Titanium Blue  256 GB</p>
-              <p className='line-through'>$1,499</p>
-            </div>
-          </div>
+        {renderContent()}
 
           
-          <div >
-            <div className="flex justify-between">
-              <p>Inventory</p>
-              <p>{stock} units left</p>
-            </div>
-
-            {/* Sliding bar */}
-            <div className='w-full h-3 bg-gray-200 rounded-full relative overflow-hidden'>
-              <div className={`w-full h-3 transition-all duration-500 ease-out ${stock < 7 ? 'bg-red-500' : 'bg-green-500' }`}  style={{ width: `${(stock/20)*100}%` }}/>
-            </div>
-
-          </div>
-
-
-          <button
-            className='flex w-full py-4 font-bold text-lg rounded-xl items-center justify-center'
-            onClick={handleBuyStock}
-          >
-            {buttonText}
-          </button>
-
-
-          {/* if(requestQueued) then show the dialog box */}
-          {requestQueued && (
-            <div className='rounded-lg'>
-              <p>Request Queued</p>
-              <p>Your order ID is {orderID}. Check your dashboard for confirmation</p>
-            </div>
-          )}
-
-        </div>
+      </div>
     </div>
     
   )
