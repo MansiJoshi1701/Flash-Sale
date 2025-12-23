@@ -4,6 +4,7 @@ import { DynamoDBDocumentClient, TransactWriteCommand } from '@aws-sdk/lib-dynam
 import dotenv from 'dotenv';
 import type { Message } from '@aws-sdk/client-sqs'
 
+//Read from the bottom for better understanding
 
 dotenv.config();
 
@@ -141,4 +142,4 @@ async function startPolling() {
 }
 
 
-startPolling();
+startPolling(); //Polling the SQS

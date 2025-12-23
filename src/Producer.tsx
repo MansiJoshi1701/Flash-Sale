@@ -1,85 +1,129 @@
 import express from 'express';
-import type { Request, Response } from 'express'
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
-
+import type { Request, Response } from 'express'
 
 dotenv.config();
 
-
 const app = express();
+app.use(cors());
+app.use(express.json());
 
-//Middlewares
-app.use(cors()); //Allows browsers to make requests to this server from other domains e.g. your React app
-app.use(express.json()); //to parse any incoming JSON text to JS object, which is then attached to the request object as 'req.body'
-
-
-// Initialize AWS SQS Client
 const sqsClient = new SQSClient({ region: process.env.AWS_REGION });
+const dbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+const docClient = DynamoDBDocumentClient.from(dbClient);
 
+// 1. START RESERVATION (Async)
+app.post('/api/reserve', async (req: Request, res: Response) => {
+    try {
+        const { userId, productId, quantity } = req.body;
+        const orderId = uuidv4();
 
-// interface OrderRequest {
-//    userId: string;
-//    productId: string;
-//    quantity: number;
-// }
+        const orderEvent = {
+            orderId, userId, productId, quantity,
+            timestamp: new Date().toISOString()
+        };
 
+        await sqsClient.send(new SendMessageCommand({
+            QueueUrl: process.env.SQS_QUEUE_URL,
+            MessageBody: JSON.stringify(orderEvent),
+        }));
 
-// THE "FLASH SALE" ENDPOINT
-app.post('/api/buy', async (req: Request, res: Response) => {
-   try {
-       const { userId, productId, quantity } = req.body;
+        res.status(202).json({
+            message: 'Reservation queued',
+            orderId: orderId,
+            status: 'PENDING'
+        });
 
-
-       // 1. Basic Validation
-       if (!userId || !productId || quantity <= 0) {
-            res.status(400).json({ error: 'Invalid order data' });
-            return;
-       }
-
-
-       // 2. Generate a unique Order ID
-       const orderId = uuidv4();
-
-
-       // 3. Construct the Event Message
-       const orderEvent = {
-           orderId,
-           userId,
-           productId,
-           quantity,
-           timestamp: new Date().toISOString(),
-           status: 'PENDING'
-       };
-
-
-       // 4. Send to SQS (The Decoupling Magic)
-       const params = {
-           QueueUrl: process.env.SQS_QUEUE_URL,
-           MessageBody: JSON.stringify(orderEvent),
-           // MessageDeduplicationId: orderId // Only for FIFO queues
-       };
-
-       await sqsClient.send(new SendMessageCommand(params));
-
-
-       // 5. Respond immediately to the user
-       console.log(`[Producer] Order ${orderId} pushed to queue.`);
-       res.status(202).json({
-           message: 'Order received! We are processing it.',
-           orderId: orderId,
-           status: 'QUEUED'
-       });
-
-
-   } catch (error) {
-       console.error('Error sending to SQS:', error);
-       res.status(500).json({ error: 'Internal Server Error' });
-   }
+    } catch (error) {
+        console.error('Producer Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
 });
 
+// 2. CHECK STATUS (Poll for specific Order)
+app.get('/api/orders/:orderId', async (req: Request, res: Response) => {
+    const { orderId } = req.params;
+    try {
+        const result = await docClient.send(new GetCommand({
+            TableName: process.env.DYNAMO_TABLE_ORDERS,
+            Key: { orderId }
+        }));
+
+        if (!result.Item) return res.json({ status: 'PENDING' });
+
+        res.json({ 
+            status: result.Item.status, 
+            reason: result.Item.failureReason 
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Could not fetch status' });
+    }
+});
+
+// 3. PROCESS PAYMENT (Sync)
+app.post('/api/pay', async (req: Request, res: Response) => {
+    const { orderId, paymentToken } = req.body; 
+
+    try {
+        const order = await docClient.send(new GetCommand({
+            TableName: process.env.DYNAMO_TABLE_ORDERS,
+            Key: { orderId } 
+        }));
+
+        if (!order.Item || order.Item.status !== 'RESERVED') {
+             res.status(400).json({ error: 'Order not reserved or expired' });
+             return; 
+        }
+
+        await new Promise(r => setTimeout(r, 1000));
+        
+        await docClient.send(new UpdateCommand({
+            TableName: process.env.DYNAMO_TABLE_ORDERS,
+            Key: { orderId },
+            UpdateExpression: 'set #s = :newStatus',
+            ExpressionAttributeNames: { '#s': 'status' },
+            ExpressionAttributeValues: { ':newStatus': 'CONFIRMED' }
+        }));
+
+        res.json({ status: 'CONFIRMED' });
+
+    } catch (error) {
+        console.error('Payment Error:', error);
+        res.status(500).json({ error: 'Payment failed' });
+    }
+});
+
+// 4. GET REAL-TIME STOCK (New Endpoint)
+// The UI will poll this to show the progress bar dropping
+app.get('/api/products/:productId', async (req: Request, res: Response) => {
+    const { productId } = req.params;
+    try {
+        const result = await docClient.send(new GetCommand({
+            TableName: process.env.DYNAMO_TABLE_PRODUCTS,
+            Key: { productId }
+        }));
+
+        if (!result.Item) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        res.json({ 
+            productId: result.Item.productId, 
+            stock: result.Item.stock 
+        });
+
+    } catch (error) {
+        console.error('Stock Check Error:', error);
+        res.status(500).json({ error: 'Could not fetch stock' });
+    }
+});
 
 const PORT = 3000;
 app.listen(PORT, () => console.log(`Producer API running on port ${PORT}`));
+
+
