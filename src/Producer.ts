@@ -22,6 +22,7 @@ app.post('/api/reserve', async (req: Request, res: Response) => {
     try {
         const { userId, productId, quantity } = req.body;
         const orderId = uuidv4();
+        console.log("Reserving order no. " , orderId);
 
         const orderEvent = {
             orderId, userId, productId, quantity,
@@ -39,6 +40,8 @@ app.post('/api/reserve', async (req: Request, res: Response) => {
             status: 'PENDING'
         });
 
+        console.log(`Reservationi queued. Current status of order ${orderId} is QUEUED`);
+
     } catch (error) {
         console.error('Producer Error:', error);
         res.status(500).json({ error: 'Internal Server Error' });
@@ -48,6 +51,7 @@ app.post('/api/reserve', async (req: Request, res: Response) => {
 // 2. CHECK STATUS (Poll for specific Order)
 app.get('/api/orders/:orderId', async (req: Request, res: Response) => {
     const { orderId } = req.params;
+    console.log("Polling for order " , orderId);
     try {
         const result = await docClient.send(new GetCommand({
             TableName: process.env.DYNAMO_TABLE_ORDERS,
@@ -60,6 +64,7 @@ app.get('/api/orders/:orderId', async (req: Request, res: Response) => {
             status: result.Item.status, 
             reason: result.Item.failureReason 
         });
+        console.log("Current status: " , result.Item.status);
     } catch (error) {
         res.status(500).json({ error: 'Could not fetch status' });
     }
@@ -101,7 +106,9 @@ app.post('/api/pay', async (req: Request, res: Response) => {
 // 4. GET REAL-TIME STOCK (New Endpoint)
 // The UI will poll this to show the progress bar dropping
 app.get('/api/products/:productId', async (req: Request, res: Response) => {
+    
     const { productId } = req.params;
+    console.log("Fetching current stock for Product ID = " , productId);
     try {
         const result = await docClient.send(new GetCommand({
             TableName: process.env.DYNAMO_TABLE_PRODUCTS,
@@ -109,15 +116,17 @@ app.get('/api/products/:productId', async (req: Request, res: Response) => {
         }));
 
         if (!result.Item) {
+            console.log("Product not found");
             return res.status(404).json({ error: 'Product not found' });
         }
 
+        console.log("Product found, stock = ", result.Item.stock);
         res.json({ 
             productId: result.Item.productId, 
             stock: result.Item.stock 
         });
 
-    } catch (error) {
+    } catch(error) {
         console.error('Stock Check Error:', error);
         res.status(500).json({ error: 'Could not fetch stock' });
     }

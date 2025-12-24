@@ -17,6 +17,7 @@ const docClient = DynamoDBDocumentClient.from(dbClient);
 const QUEUE_URL = process.env.SQS_QUEUE_URL;
 
 
+
 // THE CORE LOGIC (Resume-worthy: Idempotent Transactions)
 async function processOrder(order: any) {
    console.log(`[Worker] Processing Order: ${order.orderId}`);
@@ -45,7 +46,7 @@ async function processOrder(order: any) {
                            orderId: order.orderId,
                            userId: order.userId,
                            productId: order.productId,
-                           status: 'CONFIRMED',
+                           status: 'RESERVED',
                            processedAt: new Date().toISOString()
                        },
                        // Guard: Idempotency. If orderId exists, this fails.
@@ -57,7 +58,7 @@ async function processOrder(order: any) {
 
 
        await docClient.send(new TransactWriteCommand(transactionParams));
-       console.log(`[Worker] ✅ Order ${order.orderId} Confirmed!`);
+       console.log(`[Worker] ✅ Order ${order.orderId} Reserved!`);
 
 
    } catch (err: any) {
@@ -113,6 +114,7 @@ async function handleMessage(msg: Message) {
 
 // POLLING LOOP (Concurrency Enabled)
 async function startPolling() {
+    
    console.log('[Worker] Listening for orders (Concurrent Mode)...');
   
    while (true) {
@@ -136,7 +138,7 @@ async function startPolling() {
            }
        } catch (error) {
            console.error('[Worker] Polling Error:', error);
-           await new Promise(resolve => setTimeout(resolve, 5000));
+           await new Promise(resolve => setTimeout(resolve, 5000)); //wait for 5 secs before doing anything else
        }
    }
 }
