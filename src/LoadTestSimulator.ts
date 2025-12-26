@@ -7,7 +7,22 @@ const PRODUCT_ID = 'iphone-15';
 const TOTAL_BUYERS = 30; // How many concurrent requests to send
 // TIP: Set DynamoDB stock to 10 manually before running this to see 20 failures.
 
+let results: ({
+    status: string;
+    data: any;
+} | {
+    status: string;
+    error: any;
+})[]
+
+
+function sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+
 async function simulateFlashSale() {
+
     console.log(`\n⚡ STARTING FLASH SALE SIMULATION`);
     console.log(`🎯 Scenario: ${TOTAL_BUYERS} users are clicking 'Reserve' simultaneously.`);
     console.log(`---------------------------------------------------`);
@@ -35,7 +50,8 @@ async function simulateFlashSale() {
     console.log(`🔥 Firing ${TOTAL_BUYERS} requests now...`);
     
     // Promise.all sends all requests at virtually the same time
-    const results = await Promise.all(requests);
+    results = await Promise.all(requests);
+
     
     const endTime = Date.now();
     console.log(`🛑 Traffic burst finished in ${endTime - startTime}ms`);
@@ -55,7 +71,56 @@ async function simulateFlashSale() {
     } else {
         console.log(`\n⚠️ WARNING: Some API requests failed.`);
     }
+
+    checkOrderReservation();
+
+};
+    
+    
+simulateFlashSale();
+
+
+
+
+
+async function checkOrderReservation () {
+    //WAIT FOR 10 SECONDS BEFORE PROCEEDING
+console.log("WAITING FOR 120 SECS!");
+
+
+
+    await sleep(120000); //function call for waiting 10 secs
+        
+    //Logic to check if the all 'Queued' orders were successfully added to the DB or not
+    console.log("This is to check DB if all the successfully queued requests were processed by the Consumer or not");
+    console.log("Verifying order reservation");
+
+    let orderCount = 0;
+    results.map(async (r) => {
+
+        const orderID = r.data.orderId;
+
+        await axios.get(`http://localhost:3000/api/orders/${orderID}`)
+            .then(res => {
+
+                if(res.data.status === 'RESERVED'){
+                    console.log(`Status: Order ${res.data.status} , ${orderID} added to DB`);
+                    orderCount++;
+                    console.log("Reserved order count = " , orderCount);
+                }
+            })
+            .catch(err => {
+                console.log("FAILED reason : " , err);
+            })
+    })
+
+    if(orderCount === accepted) console.log("All queued orders reserved.");
+    else console.log("Mismatch b/w orders queued and orders reserved");
+
 }
 
-simulateFlashSale();
+
+    
+
+
 

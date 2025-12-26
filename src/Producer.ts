@@ -21,7 +21,8 @@ const docClient = DynamoDBDocumentClient.from(dbClient);
 app.post('/api/reserve', async (req: Request, res: Response) => {
     try {
         const { userId, productId, quantity } = req.body;
-        const orderId = uuidv4();
+        //const orderId = uuidv4();
+        const orderId = `ord-${Math.floor(Math.random() * 10000)}`; //for testing
         console.log("Reserving order no. " , orderId);
 
         const orderEvent = {
